@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Network, Menu, Loader2, AlertCircle } from 'lucide-react';
+import { Network, Menu, Loader2, AlertCircle, Focus, RotateCcw, ZoomIn, ZoomOut, Map as MapIcon } from 'lucide-react';
+import { Core } from 'cytoscape';
 import { GraphData, LayoutType, ColorSettings, CommunitySettings, FilterSettings, RdfNode } from './types';
 import { rdfService } from './services/rdfService';
 import { detectCommunities } from './services/communityService';
@@ -7,6 +8,7 @@ import { DEMO_TTL } from './constants';
 import GraphViewer from './components/Graph/GraphViewer';
 import Sidebar from './components/Controls/Sidebar';
 import Inspector from './components/Inspector';
+import Minimap from './components/Graph/Minimap';
 
 function App() {
   // --- State ---
@@ -18,6 +20,10 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
+  const [isMinimapOpen, setIsMinimapOpen] = useState(true);
+  
+  // Cytoscape Instance Reference
+  const [cyInstance, setCyInstance] = useState<Core | null>(null);
   
   // Settings
   const [layout, setLayout] = useState<LayoutType>('force');
@@ -39,7 +45,6 @@ function App() {
       const text = await file.text();
       const data = await rdfService.parseTurtle(text);
       setGraphData(data);
-      // Reset view state
       setCommunitySettings(s => ({...s, enabled: false}));
       setSelectedNodeId(null);
     } catch (err: any) {
@@ -66,15 +71,12 @@ function App() {
 
   const runCommunityDetection = () => {
     setIsLoading(true);
-    // Use timeout to allow UI to show loading state before heavy calculation
     setTimeout(() => {
       const communities = detectCommunities(visibleNodes, visibleEdges);
-      
       const newNodes = graphData.nodes.map(n => ({
         ...n,
         community: communities.get(n.id)
       }));
-      
       setGraphData(prev => ({ ...prev, nodes: newNodes }));
       setCommunitySettings(s => ({...s, enabled: true}));
       setColorSettings(s => ({...s, mode: 'community'}));
@@ -82,12 +84,39 @@ function App() {
     }, 100);
   };
 
+  // --- View Control Actions ---
+  const handleResetView = useCallback(() => {
+    if (cyInstance) {
+      cyInstance.animate({
+        fit: { eles: cyInstance.elements(), padding: 50 },
+        duration: 500,
+        easing: 'ease-in-out-cubic'
+      });
+    }
+  }, [cyInstance]);
+
+  const handleZoomIn = () => {
+    if (cyInstance) {
+      cyInstance.zoom({
+        level: cyInstance.zoom() * 1.2,
+        renderedPosition: { x: cyInstance.width() / 2, y: cyInstance.height() / 2 }
+      });
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (cyInstance) {
+      cyInstance.zoom({
+        level: cyInstance.zoom() * 0.8,
+        renderedPosition: { x: cyInstance.width() / 2, y: cyInstance.height() / 2 }
+      });
+    }
+  };
+
   // --- Derived State (Filtering) ---
 
   const visibleNodes = useMemo(() => {
     let filtered = graphData.nodes;
-    
-    // Search
     if (filterSettings.searchTerm) {
       const lower = filterSettings.searchTerm.toLowerCase();
       filtered = filtered.filter(n => 
@@ -95,34 +124,18 @@ function App() {
         n.id.toLowerCase().includes(lower) ||
         (n.curie && n.curie.toLowerCase().includes(lower))
       );
-      // Note: In a real graph app, searching usually just highlights, but here we filter for clarity or zoom
-      // Ideally, we keep all nodes but only show search matches? 
-      // For this implementation: We will NOT remove nodes from the graph prop passed to Cytoscape based on search, 
-      // but instead use search to Select/Highlight. 
-      // The FILTER section usually implies removing things. 
-      // Let's assume Filter Class removes them. Search highlights them.
     }
-
-    // Filter by Class (if implemented)
-    // For now, if filteredClasses is not empty, include only those.
-    // skipped for brevity in UI, but logic is here:
-    // if (filterSettings.selectedClasses.length > 0) { ... }
-
     return filtered;
   }, [graphData.nodes, filterSettings.searchTerm]);
 
   const visibleEdges = useMemo(() => {
     let filtered = graphData.edges;
-
-    // Filter by Predicate
     if (filterSettings.selectedPredicates.length > 0) {
       filtered = filtered.filter(e => filterSettings.selectedPredicates.includes(e.label) || filterSettings.selectedPredicates.includes(e.predicate));
     }
-    
     return filtered;
   }, [graphData.edges, filterSettings.selectedPredicates]);
 
-  // Derived Lists for UI
   const availablePredicates = useMemo(() => {
     const s = new Set<string>();
     graphData.edges.forEach(e => s.add(e.label));
@@ -135,29 +148,28 @@ function App() {
     return Array.from(s).sort();
   }, [graphData.nodes]);
 
-  // Handle Search Result Selection
-  useEffect(() => {
-    if (filterSettings.searchTerm && visibleNodes.length > 0) {
-       // Optional: Auto-select first match?
-       // Let's just rely on user clicking results if we had a list.
-       // For now, basic search filtering is visual only.
-    }
-  }, [filterSettings.searchTerm, visibleNodes]);
-
+  // --- Effects ---
 
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Sidebar Toggle
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault();
         setIsSidebarOpen(prev => !prev);
       }
+      // Minimap Toggle
+      if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && (e.target as HTMLElement).tagName !== 'INPUT') {
+        setIsMinimapOpen(prev => !prev);
+      }
+      // Reset View
+      if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && (e.target as HTMLElement).tagName !== 'INPUT') {
+        handleResetView();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // --- Render ---
+  }, [handleResetView]);
 
   const selectedNode = useMemo(() => 
     selectedNodeId ? graphData.nodes.find(n => n.id === selectedNodeId) || null : null
@@ -174,14 +186,25 @@ function App() {
           </div>
           <h1 className="font-bold text-lg tracking-tight text-white">RDF Explorer</h1>
         </div>
-        <div className="flex items-center gap-4 text-xs font-medium text-slate-400">
-          <span className="hidden sm:inline">Ctrl+B to toggle sidebar</span>
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-white/10 rounded-md transition-colors"
-          >
-            <Menu size={20} />
-          </button>
+        
+        <div className="flex items-center gap-2">
+           <button 
+              onClick={handleResetView}
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 rounded-md transition-colors border border-white/5"
+              title="Reset View (R)"
+           >
+              <RotateCcw size={14} /> Reset View
+           </button>
+           <div className="w-px h-6 bg-white/10 mx-2 hidden sm:block"></div>
+           <div className="flex items-center gap-4 text-xs font-medium text-slate-400">
+             <span className="hidden lg:inline">Ctrl+B Sidebar</span>
+             <button 
+               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+               className="p-2 hover:bg-white/10 rounded-md transition-colors"
+             >
+               <Menu size={20} />
+             </button>
+           </div>
         </div>
       </header>
 
@@ -229,6 +252,7 @@ function App() {
                   }}
                   selectedNodeId={selectedNodeId}
                   focusMode={focusMode}
+                  setCyInstance={setCyInstance}
                />
              ) : (
                <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
@@ -243,6 +267,34 @@ function App() {
                </div>
              )}
           </div>
+
+          {/* Floating Controls Toolbar */}
+          {graphData.nodes.length > 0 && (
+            <div className="absolute bottom-4 left-4 z-40 flex flex-col gap-2">
+              <div className="glass-panel p-1 rounded-lg flex flex-col gap-1 shadow-xl">
+                 <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="Zoom In">
+                    <ZoomIn size={18} />
+                 </button>
+                 <button onClick={handleZoomOut} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="Zoom Out">
+                    <ZoomOut size={18} />
+                 </button>
+                 <div className="h-px bg-white/10 mx-1"></div>
+                 <button onClick={handleResetView} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="Reset View (R)">
+                    <RotateCcw size={18} />
+                 </button>
+              </div>
+              <button 
+                onClick={() => setIsMinimapOpen(!isMinimapOpen)}
+                className={`glass-panel p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors shadow-xl ${isMinimapOpen ? 'text-blue-400 bg-blue-500/10 border-blue-500/30' : ''}`}
+                title="Toggle Minimap (M)"
+              >
+                <MapIcon size={18} />
+              </button>
+            </div>
+          )}
+          
+          {/* Minimap HUD */}
+          <Minimap cy={cyInstance} isOpen={isMinimapOpen} onClose={() => setIsMinimapOpen(false)} />
 
           {/* Loading Overlay */}
           {isLoading && (

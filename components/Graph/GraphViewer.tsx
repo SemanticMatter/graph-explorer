@@ -4,9 +4,6 @@ import cytoscape, { Core, EdgeSingular, NodeSingular } from 'cytoscape';
 import { RdfNode, RdfEdge, LayoutType, ColorSettings } from '../../types';
 import { COLOR_PALETTE } from '../../constants';
 
-// Register standard layouts (Cytoscape includes grid, circle, concentric, breadthfirst, cose by default)
-// No extra registration needed for standard ones.
-
 interface GraphViewerProps {
   nodes: RdfNode[];
   edges: RdfEdge[];
@@ -15,6 +12,7 @@ interface GraphViewerProps {
   onNodeClick: (node: RdfNode | null) => void;
   selectedNodeId: string | null;
   focusMode: boolean;
+  setCyInstance?: (cy: Core) => void;
 }
 
 const GraphViewer: React.FC<GraphViewerProps> = ({ 
@@ -24,7 +22,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
   colorSettings,
   onNodeClick,
   selectedNodeId,
-  focusMode
+  focusMode,
+  setCyInstance
 }) => {
   const cyRef = useRef<Core | null>(null);
   const [elements, setElements] = useState<any[]>([]);
@@ -41,7 +40,6 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
           community: n.community,
           degree: n.val // simplistic degree
         },
-        // We can pre-calculate styles or use stylesheet
       })),
       ...edges.map(e => ({
         data: { 
@@ -92,9 +90,12 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
     if (!cyRef.current) return;
     const cy = cyRef.current;
     
-    const layoutConfig = getLayoutConfig(layout);
-    const layoutInstance = cy.layout(layoutConfig);
-    layoutInstance.run();
+    // Only run layout if we have elements to avoid errors
+    if (elements.length > 0) {
+      const layoutConfig = getLayoutConfig(layout);
+      const layoutInstance = cy.layout(layoutConfig);
+      layoutInstance.run();
+    }
 
   }, [layout, elements, getLayoutConfig]);
 
@@ -103,7 +104,6 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
     if (colorSettings.mode === 'mono') return colorSettings.baseColor;
     
     if (colorSettings.mode === 'class') {
-      // Simple hash from first class or 'default'
       const cls = nodeData.classes && nodeData.classes.length > 0 ? nodeData.classes[0] : 'default';
       let hash = 0;
       for (let i = 0; i < cls.length; i++) hash = cls.charCodeAt(i) + ((hash << 5) - hash);
@@ -118,8 +118,6 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
     }
 
     if (colorSettings.mode === 'degree') {
-      // Interpolate blue to red based on degree (val)
-      // val is approx 1-20
       const intensity = Math.min(1, (nodeData.degree || 1) / 10);
       return intensity > 0.5 ? '#ef4444' : '#3b82f6';
     }
@@ -127,7 +125,6 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
     return colorSettings.baseColor;
   }, [colorSettings]);
 
-  // Apply Styles
   useEffect(() => {
     if (!cyRef.current) return;
     const cy = cyRef.current;
@@ -144,8 +141,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
           'text-outline-color': '#0f172a',
           'text-outline-width': 2,
           'font-size': '12px',
-          'width': (ele: NodeSingular) => Math.max(20, Math.min(60, (ele.data('degree') || 1) * 5 + 20)),
-          'height': (ele: NodeSingular) => Math.max(20, Math.min(60, (ele.data('degree') || 1) * 5 + 20)),
+          'width': (ele: NodeSingular) => `${Math.max(20, Math.min(60, (ele.data('degree') || 1) * 5 + 20))}px`,
+          'height': (ele: NodeSingular) => `${Math.max(20, Math.min(60, (ele.data('degree') || 1) * 5 + 20))}px`,
           'border-width': 2,
           'border-color': 'rgba(255,255,255,0.1)',
           'transition-property': 'background-color, width, height, opacity',
@@ -163,7 +160,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
       {
         selector: 'edge',
         style: {
-          'width': 1.5,
+          'width': '1.5px',
           'line-color': '#334155', // slate-700
           'target-arrow-color': '#334155',
           'target-arrow-shape': 'triangle',
@@ -188,12 +185,11 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
           'opacity': 1
         }
       },
-      // Focus Mode Styles
       {
         selector: '.dimmed',
         style: {
           'opacity': 0.1,
-          'label': '', // hide label when dimmed
+          'label': '',
         }
       },
       {
@@ -217,15 +213,11 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
       const selected = cy.getElementById(selectedNodeId);
       
       if (focusMode) {
-        // Dim everything
         cy.elements().addClass('dimmed');
-        
-        // Highlight selected and neighbors
         const neighborhood = selected.neighborhood().add(selected);
         neighborhood.removeClass('dimmed').addClass('highlighted');
       }
       
-      // Select visually
       cy.$(':selected').unselect();
       selected.select();
     }
@@ -237,6 +229,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
       style={{ width: '100%', height: '100%' }}
       cy={(cy) => {
         cyRef.current = cy;
+        if (setCyInstance) setCyInstance(cy);
+        
         cy.on('tap', 'node', (evt) => {
           const node = evt.target;
           onNodeClick({ 
@@ -245,7 +239,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
              type: node.data('type'),
              classes: node.data('classes'),
              community: node.data('community'),
-             curie: node.data('curie') // Note: Need to pass curie through element data if we want it back here
+             curie: node.data('curie')
           });
         });
         cy.on('tap', (evt) => {
