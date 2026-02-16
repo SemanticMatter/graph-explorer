@@ -9,6 +9,7 @@ interface InspectorProps {
   onFocusModeToggle: (enabled: boolean) => void;
   focusMode: boolean;
   onCenterNode: (id: string) => void;
+  rightOffsetPx?: number;
 }
 
 const Inspector: React.FC<InspectorProps> = ({ 
@@ -17,7 +18,8 @@ const Inspector: React.FC<InspectorProps> = ({
   onClose, 
   onFocusModeToggle, 
   focusMode,
-  onCenterNode 
+  onCenterNode,
+  rightOffsetPx = 0
 }) => {
   if (!node) return null;
 
@@ -26,7 +28,10 @@ const Inspector: React.FC<InspectorProps> = ({
   const incoming = edges.filter(e => e.target === node.id);
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-80 glass-panel border-l border-white/10 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 z-20">
+    <div
+      className="absolute top-0 bottom-0 w-80 glass-panel border-l border-white/10 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 z-20"
+      style={{ right: rightOffsetPx }}
+    >
       
       {/* Header */}
       <div className="p-4 border-b border-white/10 flex justify-between items-start">

@@ -58,3 +58,5 @@ export const COLOR_PALETTE = [
 
 // Special marker for predicate filtering meaning "no predicates are active".
 export const PREDICATE_NONE_SENTINEL = '__NONE__';
+export const DEFAULT_API_BASE_URL = '/kgapi';
+export const STORAGE_API_BASE_URL_KEY = 'rdfExplorer.apiBaseUrl';

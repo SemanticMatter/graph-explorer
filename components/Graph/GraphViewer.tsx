@@ -17,6 +17,8 @@ interface GraphViewerProps {
   layoutRunNonce: number;
   expansionRevision: number;
   lastExpandedNodeId: string | null;
+  shaclFocusNodeId?: string | null;
+  shaclFocusPredicate?: string | null;
   setCyInstance?: (cy: Core) => void;
 }
 
@@ -35,6 +37,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
   layoutRunNonce,
   expansionRevision,
   lastExpandedNodeId,
+  shaclFocusNodeId,
+  shaclFocusPredicate,
   setCyInstance
 }) => {
   const cyRef = useRef<Core | null>(null);
@@ -53,7 +57,9 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
           community: n.community,
           degree: n.val,
           isExpanded: n.isExpanded ? 1 : 0,
-          isExpandedSeed: n.isExpandedSeed ? 1 : 0
+          isExpandedSeed: n.isExpandedSeed ? 1 : 0,
+          isInvalid: n.isInvalid ? 1 : 0,
+          isShaclFocus: shaclFocusNodeId && n.id === shaclFocusNodeId ? 1 : 0
         }
       })),
       ...edges.map((e) => ({
@@ -62,12 +68,14 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
           source: e.source,
           target: e.target,
           label: e.label,
-          isExpanded: e.isExpanded ? 1 : 0
+          predicate: e.predicate,
+          isExpanded: e.isExpanded ? 1 : 0,
+          isShaclFocus: shaclFocusNodeId && e.source === shaclFocusNodeId && (!shaclFocusPredicate || e.predicate === shaclFocusPredicate) ? 1 : 0
         }
       }))
     ];
     setElements(newElements);
-  }, [nodes, edges]);
+  }, [nodes, edges, shaclFocusNodeId, shaclFocusPredicate]);
 
   const getLayoutConfig = useCallback((type: LayoutType) => {
     const baseConfig = { animate: true, animationDuration: 500 };
@@ -194,6 +202,26 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
         }
       },
       {
+        selector: 'node[isInvalid = 1]',
+        style: {
+          'border-width': 4,
+          'border-color': '#ef4444',
+          'shadow-blur': 20,
+          'shadow-color': '#ef4444',
+          'shadow-opacity': 0.55
+        }
+      },
+      {
+        selector: 'node[isShaclFocus = 1]',
+        style: {
+          'border-width': 5,
+          'border-color': '#22d3ee',
+          'shadow-blur': 24,
+          'shadow-color': '#22d3ee',
+          'shadow-opacity': 0.75
+        }
+      },
+      {
         selector: 'node[isExpanded = 1]',
         style: {
           'border-width': 3,
@@ -241,6 +269,17 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
           'text-background-color': '#1f2937',
           'text-background-opacity': 0.9,
           'color': '#fcd34d'
+        }
+      },
+      {
+        selector: 'edge[isShaclFocus = 1]',
+        style: {
+          'width': '3.5px',
+          'line-color': '#22d3ee',
+          'target-arrow-color': '#22d3ee',
+          'opacity': 1,
+          'color': '#67e8f9',
+          'text-background-color': '#0f172a'
         }
       },
       {

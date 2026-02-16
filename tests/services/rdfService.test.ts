@@ -64,3 +64,25 @@ test('RdfService rejects invalid turtle input', async () => {
     await svc.parseTurtle('this is not valid turtle . . .');
   });
 });
+
+test('RdfService parses compacted JSON-LD and exports roundtrip JSON-LD', async () => {
+  const svc = new RdfService();
+  const jsonld = JSON.stringify({
+    '@context': {
+      ex: 'http://example.org/',
+      name: 'http://xmlns.com/foaf/0.1/name',
+      knows: 'http://xmlns.com/foaf/0.1/knows'
+    },
+    '@id': 'ex:Alice',
+    name: 'Alice',
+    knows: { '@id': 'ex:Bob' }
+  });
+
+  const graph = await svc.parseRdf(jsonld, 'application/ld+json');
+  assert.ok(graph.nodes.some((n) => n.id === 'http://example.org/Alice'));
+  assert.ok(graph.edges.some((e) => e.predicate === 'http://xmlns.com/foaf/0.1/knows'));
+
+  const exported = await svc.serializeGraph(graph, 'application/ld+json', true);
+  const reparsed = await svc.parseRdf(exported, 'application/ld+json');
+  assert.equal(reparsed.edges.length >= graph.edges.length, true);
+});
