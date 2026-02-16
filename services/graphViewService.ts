@@ -1,4 +1,5 @@
 import { FilterSettings, GraphData, RdfEdge, RdfNode } from '../types';
+import { PREDICATE_NONE_SENTINEL } from '../constants';
 
 export const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 export const RDFS_SUBCLASS_OF = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
@@ -37,6 +38,7 @@ export function buildFilteredGraph(fullGraph: GraphData, filterSettings: FilterS
   const searchTerm = filterSettings.searchTerm.trim().toLowerCase();
   const selectedClasses = new Set(filterSettings.selectedClasses);
   const selectedPredicates = new Set(filterSettings.selectedPredicates);
+  const nonePredicateMode = selectedPredicates.has(PREDICATE_NONE_SENTINEL);
 
   const nodeIds = new Set<string>();
 
@@ -60,6 +62,7 @@ export function buildFilteredGraph(fullGraph: GraphData, filterSettings: FilterS
   });
 
   const edges = fullGraph.edges.filter((edge) => {
+    if (nonePredicateMode) return false;
     if (selectedPredicates.size > 0 && !selectedPredicates.has(edge.label) && !selectedPredicates.has(edge.predicate)) {
       return false;
     }
@@ -187,6 +190,36 @@ export function mergeFilteredWithExpanded(
     nodes: Array.from(mergedNodesMap.values()),
     edges: Array.from(mergedEdgesMap.values())
   };
+}
+
+export function enforcePredicateVisibilityPolicy(
+  mergedGraph: { nodes: RdfNode[]; edges: RdfEdge[] },
+  activePredicates: Set<string>,
+  selectedNodeId: string | null
+) {
+  const hasPredicateFilter = activePredicates.size > 0;
+
+  const edges = mergedGraph.edges.filter((edge) => {
+    if (edge.isExpanded) return true;
+    if (!hasPredicateFilter) return true;
+    return activePredicates.has(edge.label) || activePredicates.has(edge.predicate);
+  });
+
+  const requiredNodeIds = new Set<string>();
+  edges.forEach((edge) => {
+    requiredNodeIds.add(edge.source);
+    requiredNodeIds.add(edge.target);
+  });
+
+  mergedGraph.nodes.forEach((node) => {
+    if (node.isExpandedSeed) requiredNodeIds.add(node.id);
+  });
+
+  if (selectedNodeId) requiredNodeIds.add(selectedNodeId);
+
+  const nodes = mergedGraph.nodes.filter((node) => requiredNodeIds.has(node.id));
+
+  return { nodes, edges };
 }
 
 export function getNeighborCount(index: GraphIndex, nodeId: string): number {

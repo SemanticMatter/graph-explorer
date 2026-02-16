@@ -9,6 +9,7 @@ import {
   buildExpandedGraph,
   buildFilteredGraph,
   buildGraphIndex,
+  enforcePredicateVisibilityPolicy,
   getNeighborCount as computeNeighborCount,
   mergeFilteredWithExpanded
 } from './services/graphViewService';
@@ -109,6 +110,11 @@ function App() {
     () => mergeFilteredWithExpanded(filteredGraph, expandedGraph, expandedNodes),
     [filteredGraph, expandedGraph, expandedNodes]
   );
+
+  const renderGraph = useMemo(() => {
+    const activePredicates = new Set(filterSettings.selectedPredicates);
+    return enforcePredicateVisibilityPolicy(mergedGraph, activePredicates, selectedNodeId);
+  }, [mergedGraph, filterSettings.selectedPredicates, selectedNodeId]);
 
   const availablePredicates = useMemo(() => {
     const s = new Set<string>();
@@ -244,8 +250,8 @@ function App() {
   }, [handleResetView, selectedNodeId, toggleNodeExpansion]);
 
   useEffect(() => {
-    setSelectedNode(resolveSelectedNode(selectedNodeId, mergedGraph.nodes, fullGraph.nodes));
-  }, [selectedNodeId, mergedGraph.nodes, fullGraph.nodes]);
+    setSelectedNode(resolveSelectedNode(selectedNodeId, renderGraph.nodes, fullGraph.nodes));
+  }, [selectedNodeId, renderGraph.nodes, fullGraph.nodes]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-200 overflow-hidden relative selection:bg-blue-500/30">
@@ -316,12 +322,12 @@ function App() {
           <div className="absolute inset-0 bg-slate-950 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px]">
             {fullGraph.nodes.length > 0 ? (
               <GraphViewer
-                nodes={mergedGraph.nodes}
-                edges={mergedGraph.edges}
+                nodes={renderGraph.nodes}
+                edges={renderGraph.edges}
                 layout={layout}
                 colorSettings={colorSettings}
                 onNodeClick={(node) => {
-                  const next = applyNodeClickSelection(node, mergedGraph.nodes, fullGraph.nodes, focusMode);
+                  const next = applyNodeClickSelection(node, renderGraph.nodes, fullGraph.nodes, focusMode);
                   setSelectedNodeId(next.selectedNodeId);
                   setSelectedNode(next.selectedNode);
                   setFocusMode(next.focusMode);
@@ -348,27 +354,6 @@ function App() {
               </div>
             )}
           </div>
-
-          {fullGraph.nodes.length > 0 && (
-            <div className="absolute top-4 right-4 z-40 glass-panel p-3 rounded-lg text-xs text-slate-300 border border-white/10">
-              <div className="font-semibold text-slate-100 mb-2">Legend</div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 rounded-full bg-blue-500/80"></span>
-                  Normal node
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 rounded-full border-2 border-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.7)]"></span>
-                  Expanded (filter override)
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-4 h-[2px] bg-amber-300"></span>
-                  Expanded edge
-                </div>
-              </div>
-              <div className="mt-2 text-[11px] text-slate-400">Double-click node or press E to toggle 1-hop expansion.</div>
-            </div>
-          )}
 
           {fullGraph.nodes.length > 0 && (
             <div className="absolute bottom-4 left-4 z-40 flex flex-col gap-2">
@@ -427,7 +412,7 @@ function App() {
             focusMode={focusMode}
             onCenterNode={(nodeId) => {
               setSelectedNodeId(nodeId);
-              setSelectedNode(resolveSelectedNode(nodeId, mergedGraph.nodes, fullGraph.nodes));
+              setSelectedNode(resolveSelectedNode(nodeId, renderGraph.nodes, fullGraph.nodes));
             }}
           />
         )}

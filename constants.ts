@@ -55,3 +55,6 @@ export const COLOR_PALETTE = [
   '#f97316', // Orange
   '#6366f1', // Indigo
 ];
+
+// Special marker for predicate filtering meaning "no predicates are active".
+export const PREDICATE_NONE_SENTINEL = '__NONE__';

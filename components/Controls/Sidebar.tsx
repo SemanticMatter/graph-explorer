@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { LayoutType, ColorSettings, CommunitySettings, FilterSettings, GraphData } from '../../types';
-import { Upload, FileText, Settings, Share2, Layers, Search, Filter, Palette, Activity } from 'lucide-react';
+import { LayoutType, ColorSettings, CommunitySettings, FilterSettings } from '../../types';
+import { Upload, FileText, Share2, Layers, Search, Filter, Palette, Activity } from 'lucide-react';
+import { PREDICATE_NONE_SENTINEL } from '../../constants';
 
 interface SidebarProps {
   onImport: (file: File) => void;
@@ -36,6 +37,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   availablePredicates
 }) => {
   const [activeTab, setActiveTab] = useState<'data' | 'view' | 'analyze'>('data');
+  const nonePredicateMode = filterSettings.selectedPredicates.includes(PREDICATE_NONE_SENTINEL);
+  const activePredicateSet = new Set(
+    nonePredicateMode
+      ? []
+      : filterSettings.selectedPredicates.length === 0
+        ? availablePredicates
+        : filterSettings.selectedPredicates
+  );
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -190,30 +199,44 @@ const Sidebar: React.FC<SidebarProps> = ({
 
               <div className="space-y-1">
                  <label className="text-xs text-slate-500 block mb-1">Predicates</label>
+                 <div className="grid grid-cols-2 gap-2 mb-2">
+                   <button
+                     onClick={() => setFilterSettings({ ...filterSettings, selectedPredicates: [] })}
+                     className="py-1 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                   >
+                     Enable All
+                   </button>
+                   <button
+                     onClick={() => setFilterSettings({ ...filterSettings, selectedPredicates: [PREDICATE_NONE_SENTINEL] })}
+                     className="py-1 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                   >
+                     Disable All
+                   </button>
+                 </div>
                  <div className="max-h-32 overflow-y-auto border border-slate-700 rounded bg-slate-900 p-2 space-y-1">
                    {availablePredicates.map(pred => (
                      <label key={pred} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white/5 p-1 rounded">
                        <input 
                          type="checkbox" 
-                         checked={filterSettings.selectedPredicates.length === 0 || filterSettings.selectedPredicates.includes(pred)}
+                         checked={activePredicateSet.has(pred)}
                          onChange={(e) => {
                            const checked = e.target.checked;
-                           let newPreds = [...filterSettings.selectedPredicates];
-                           if (newPreds.length === 0) {
-                              // If currently "Show All" (empty), and we uncheck one, we must populate with all others
-                              // Actually easier: if list is empty, it means all.
-                              if (!checked) {
-                                newPreds = availablePredicates.filter(p => p !== pred);
-                              } else {
-                                // If list was empty and we check one... logic is tricky.
-                                // Standard logic: Empty = All. Non-Empty = specific.
-                                newPreds = [pred];
-                              }
-                           } else {
-                             if (checked) newPreds.push(pred);
-                             else newPreds = newPreds.filter(p => p !== pred);
+                           const next = new Set(activePredicateSet);
+
+                           if (checked) next.add(pred);
+                           else next.delete(pred);
+
+                           if (next.size === 0) {
+                             setFilterSettings({ ...filterSettings, selectedPredicates: [PREDICATE_NONE_SENTINEL] });
+                             return;
                            }
-                           setFilterSettings({...filterSettings, selectedPredicates: newPreds});
+
+                           if (next.size === availablePredicates.length) {
+                             setFilterSettings({ ...filterSettings, selectedPredicates: [] });
+                             return;
+                           }
+
+                           setFilterSettings({ ...filterSettings, selectedPredicates: Array.from(next) });
                          }}
                          className="rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-0"
                        />

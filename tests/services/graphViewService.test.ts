@@ -7,9 +7,11 @@ import {
   buildExpandedGraph,
   buildFilteredGraph,
   buildGraphIndex,
+  enforcePredicateVisibilityPolicy,
   getNeighborCount,
   mergeFilteredWithExpanded
 } from '../../services/graphViewService';
+import { PREDICATE_NONE_SENTINEL } from '../../constants';
 
 const baseFilter: FilterSettings = {
   showLiterals: true,
@@ -68,6 +70,15 @@ test('buildFilteredGraph keeps connected edges for included nodes', () => {
   assert.deepEqual(filtered.edges.map((e) => e.id).sort(), ['e1', 'e2']);
 });
 
+test('buildFilteredGraph hides all edges in disable-all predicate mode', () => {
+  const filtered = buildFilteredGraph(sampleGraph, {
+    ...baseFilter,
+    selectedPredicates: [PREDICATE_NONE_SENTINEL]
+  });
+
+  assert.equal(filtered.edges.length, 0);
+});
+
 test('buildExpandedGraph includes 1-hop, rdf:type, and subclass hierarchy', () => {
   const index = buildGraphIndex(sampleGraph);
   const expanded = buildExpandedGraph(index, new Set(['A']));
@@ -111,4 +122,37 @@ test('getNeighborCount counts unique 1-hop neighbors', () => {
   assert.equal(getNeighborCount(index, 'A'), 4);
   assert.equal(getNeighborCount(index, 'B'), 1);
   assert.equal(getNeighborCount(index, 'missing'), 0);
+});
+
+test('predicate policy: only active predicates and expanded override edges remain visible', () => {
+  const merged = {
+    nodes: sampleGraph.nodes,
+    edges: [
+      { ...sampleGraph.edges[0], isExpanded: false }, // knows
+      { ...sampleGraph.edges[1], isExpanded: false }, // worksAt
+      { ...sampleGraph.edges[2], isExpanded: true } // name (override)
+    ]
+  };
+
+  const result = enforcePredicateVisibilityPolicy(merged, new Set(['knows']), null);
+
+  assert.deepEqual(result.edges.map((e) => e.id).sort(), ['e1', 'e3']);
+});
+
+test('predicate policy: expanded edges disappear immediately once expansion flag is removed', () => {
+  const withExpansion = {
+    nodes: sampleGraph.nodes,
+    edges: [{ ...sampleGraph.edges[2], isExpanded: true }] // name
+  };
+  const withoutExpansion = {
+    nodes: sampleGraph.nodes,
+    edges: [{ ...sampleGraph.edges[2], isExpanded: false }]
+  };
+
+  const activePredicates = new Set(['knows']);
+  const resultWith = enforcePredicateVisibilityPolicy(withExpansion, activePredicates, null);
+  const resultWithout = enforcePredicateVisibilityPolicy(withoutExpansion, activePredicates, null);
+
+  assert.equal(resultWith.edges.length, 1);
+  assert.equal(resultWithout.edges.length, 0);
 });
