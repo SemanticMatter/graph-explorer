@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "noEmit": false
+  },
+  "include": [
+    "tests/**/*.ts",
+    "services/**/*.ts",
+    "types.ts"
+  ],
+  "exclude": ["node_modules", "dist", ".test-dist"]
+}

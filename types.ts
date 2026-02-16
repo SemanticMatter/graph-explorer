@@ -6,6 +6,8 @@ export interface RdfNode {
   classes: string[]; // rdf:type values
   community?: number;
   val?: number; // for degrees
+  isExpanded?: boolean;
+  isExpandedSeed?: boolean;
 }
 
 export interface RdfEdge {
@@ -15,6 +17,7 @@ export interface RdfEdge {
   label: string;
   curie?: string;
   predicate: string;
+  isExpanded?: boolean;
 }
 
 export interface GraphData {
