@@ -1,0 +1,5 @@
+{
+  "name": "RDF Graph Explorer",
+  "description": "A high-performance, interactive RDF graph visualizer supporting Turtle (.ttl) files, community detection, and multiple layout strategies.",
+  "requestFramePermissions": []
+}
