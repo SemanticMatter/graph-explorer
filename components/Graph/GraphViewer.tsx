@@ -9,6 +9,8 @@ interface GraphViewerProps {
   edges: RdfEdge[];
   layout: LayoutType;
   colorSettings: ColorSettings;
+  showNodeLabels: boolean;
+  showEdgeLabels: boolean;
   onNodeClick: (node: RdfNode | null) => void;
   onNodeDoubleClick: (nodeId: string) => void;
   selectedNodeId: string | null;
@@ -29,6 +31,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
   edges,
   layout,
   colorSettings,
+  showNodeLabels,
+  showEdgeLabels,
   onNodeClick,
   onNodeDoubleClick,
   selectedNodeId,
@@ -178,7 +182,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
         selector: 'node',
         style: {
           'background-color': (ele: NodeSingular) => getNodeColor(ele.data()),
-          'label': 'data(label)',
+          'label': showNodeLabels ? 'data(label)' : '',
           'color': '#cbd5e1',
           'text-valign': 'center',
           'text-halign': 'center',
@@ -250,7 +254,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
           'target-arrow-shape': 'triangle',
           'curve-style': 'bezier',
           'opacity': 0.6,
-          'label': 'data(label)',
+          'label': showEdgeLabels ? 'data(label)' : '',
           'font-size': '10px',
           'color': '#64748b',
           'text-rotation': 'autorotate',
@@ -307,7 +311,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({
         }
       }
     ]);
-  }, [colorSettings, getNodeColor]);
+  }, [colorSettings, getNodeColor, showNodeLabels, showEdgeLabels]);
 
   useEffect(() => {
     if (!cyRef.current) return;

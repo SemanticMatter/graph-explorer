@@ -1,6 +1,6 @@
 # RDF Graph Explorer
 
-Interactive RDF/Turtle (`.ttl`) graph visualization app built with React, TypeScript, Vite, Cytoscape, and N3.
+Interactive RDF/Turtle (`.ttl`) graph visualization app
 
 ## What It Does
 
@@ -33,20 +33,6 @@ Interactive RDF/Turtle (`.ttl`) graph visualization app built with React, TypeSc
 - `services/rdfService.ts`: Turtle parsing + graph model construction
 - `services/communityService.ts`: community detection
 - `vite.config.ts`: dev server config + environment variable injection
-
-## Environment Variables
-
-Create `.env.local` in the repo root:
-
-```bash
-GEMINI_API_KEY=your_value_here
-```
-
-Notes:
-
-- The current codebase injects `GEMINI_API_KEY` in `vite.config.ts`.
-- The app currently does not call Gemini APIs at runtime, so this variable is effectively optional for current behavior.
-- Keep `.env.local` out of version control.
 
 ## Local Development
 
@@ -90,16 +76,12 @@ This is a static frontend app. Deploy the `dist/` folder to any static host.
 
 1. Build command: `npm run build`
 2. Publish directory: `dist`
-3. If needed, set env var in Netlify UI:
-   - `GEMINI_API_KEY`
 
 ### Option B: Vercel
 
 1. Framework preset: `Vite`
 2. Build command: `npm run build`
 3. Output directory: `dist`
-4. Add env var if required:
-   - `GEMINI_API_KEY`
 
 ### Option C: GitHub Pages (artifact deploy)
 

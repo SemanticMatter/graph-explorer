@@ -45,11 +45,6 @@ Applies to the `graph_explorer` workspace root.
 - `selectedClasses` exists in state/types but is not currently applied to visible nodes.
 - Community settings UI exposes `lpa` and `louvain`; service currently runs one label-propagation style algorithm.
 
-## Environment and Config
-
-- `vite.config.ts` injects `GEMINI_API_KEY` into `process.env.API_KEY` and `process.env.GEMINI_API_KEY`.
-- Current app code does not consume those values directly.
-- If deploying under subpath, set Vite `base` before building.
 
 ## Working Rules for Edits
 

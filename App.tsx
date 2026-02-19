@@ -17,10 +17,12 @@ import {
 import { rdfService } from './services/rdfService';
 import { detectCommunities } from './services/communityService';
 import { DEMO_TTL, DEFAULT_API_BASE_URL, STORAGE_API_BASE_URL_KEY } from './constants';
+import { LARGE_GRAPH_MAX_ACTIVE_PREDICATES, LARGE_GRAPH_TRIPLE_THRESHOLD } from './constants';
 import {
   buildExpandedGraph,
   buildFilteredGraph,
   buildGraphIndex,
+  deriveInitialPredicatePolicy,
   enforcePredicateVisibilityPolicy,
   getNeighborCount as computeNeighborCount,
   mergeFilteredWithExpanded
@@ -35,6 +37,8 @@ import ShaclReportPanel from './components/Report/ShaclReportPanel';
 
 const EMPTY_GRAPH: GraphData = { nodes: [], edges: [], prefixes: {} };
 const EXPAND_NEIGHBOR_WARN_THRESHOLD = 200;
+const JOB_POLL_INTERVAL_MS = 1000;
+const JOB_MAX_POLLS = 180;
 
 function downloadFile(fileName: string, content: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -63,6 +67,7 @@ function App() {
   const [sourceFormat, setSourceFormat] = useState<RdfMimeType>('text/turtle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -80,6 +85,8 @@ function App() {
 
   const [layout, setLayout] = useState<LayoutType>('force');
   const [colorSettings, setColorSettings] = useState<ColorSettings>({ mode: 'class', baseColor: '#3b82f6' });
+  const [showNodeLabels, setShowNodeLabels] = useState(true);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [communitySettings, setCommunitySettings] = useState<CommunitySettings>({ enabled: false, algorithm: 'lpa', resolution: 1.0 });
   const [filterSettings, setFilterSettings] = useState<FilterSettings>({
     showLiterals: true,
@@ -167,10 +174,31 @@ function App() {
   const handleImport = async (file: File) => {
     setIsLoading(true);
     setError(null);
+    setInfoMessage(null);
     try {
       const { data, format } = await rdfService.parseFile(file);
+      const loadPolicy = deriveInitialPredicatePolicy(data, {
+        tripleThreshold: LARGE_GRAPH_TRIPLE_THRESHOLD,
+        maxActivePredicates: LARGE_GRAPH_MAX_ACTIVE_PREDICATES
+      });
       setFullGraph(data);
       setSourceFormat(format);
+      setFilterSettings((prev) => ({
+        ...prev,
+        selectedClasses: [],
+        searchTerm: '',
+        selectedPredicates: loadPolicy.selectedPredicates
+      }));
+      if (loadPolicy.isLimited) {
+        setShowNodeLabels(false);
+        setShowEdgeLabels(false);
+      } else {
+        setShowNodeLabels(true);
+        setShowEdgeLabels(true);
+      }
+      if (loadPolicy.summary) {
+        setInfoMessage(`${loadPolicy.summary} Labels were disabled automatically for faster rendering.`);
+      }
       setCommunitySettings((s) => ({ ...s, enabled: false }));
       setInferredGraph(null);
       resetGraphInteractions();
@@ -185,10 +213,31 @@ function App() {
   const handleLoadDemo = async () => {
     setIsLoading(true);
     setError(null);
+    setInfoMessage(null);
     try {
       const data = await rdfService.parseRdf(DEMO_TTL, 'text/turtle');
+      const loadPolicy = deriveInitialPredicatePolicy(data, {
+        tripleThreshold: LARGE_GRAPH_TRIPLE_THRESHOLD,
+        maxActivePredicates: LARGE_GRAPH_MAX_ACTIVE_PREDICATES
+      });
       setFullGraph(data);
       setSourceFormat('text/turtle');
+      setFilterSettings((prev) => ({
+        ...prev,
+        selectedClasses: [],
+        searchTerm: '',
+        selectedPredicates: loadPolicy.selectedPredicates
+      }));
+      if (loadPolicy.isLimited) {
+        setShowNodeLabels(false);
+        setShowEdgeLabels(false);
+      } else {
+        setShowNodeLabels(true);
+        setShowEdgeLabels(true);
+      }
+      if (loadPolicy.summary) {
+        setInfoMessage(`${loadPolicy.summary} Labels were disabled automatically for faster rendering.`);
+      }
       setCommunitySettings((s) => ({ ...s, enabled: false }));
       setInferredGraph(null);
       resetGraphInteractions();
@@ -369,25 +418,33 @@ function App() {
       options: {},
       resultFormat: reasoningResultFormat
     });
+
     setReasoningJobId(response.jobId);
     setReasoningJobStatus('queued');
-  }), [apiBaseUrl, ensureCurrentGraphUploaded, reasoningProfile, reasoningResultFormat, runAnalyzeAction]);
 
-  const handlePollReasoningJob = useCallback(() => runAnalyzeAction('Poll reasoning job', async () => {
-    if (!reasoningJobId) throw new Error('No reasoning job_id available.');
-    const status = await kgApiService.reasoningJob(apiBaseUrl, reasoningJobId);
-    setReasoningJobStatus(status.status);
-    if (status.status === 'failed' && status.error?.message) {
-      throw new Error(status.error.message);
+    let completed = false;
+    for (let i = 0; i < JOB_MAX_POLLS; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
+      const status = await kgApiService.reasoningJob(apiBaseUrl, response.jobId);
+      setReasoningJobStatus(status.status);
+      setAnalyzeMessage(`Reasoning job is ${status.status}...`);
+
+      if (status.status === 'failed') {
+        throw new Error(status.error?.message || 'Reasoning job failed.');
+      }
+      if (status.status === 'succeeded') {
+        completed = true;
+        break;
+      }
     }
-  }), [apiBaseUrl, reasoningJobId, runAnalyzeAction]);
 
-  const handleFetchReasoningResult = useCallback(() => runAnalyzeAction('Fetch reasoning result', async () => {
-    if (!reasoningJobId) throw new Error('No reasoning job_id available.');
-    const resultText = await kgApiService.reasoningResult(apiBaseUrl, reasoningJobId, reasoningResultFormat);
+    if (!completed) throw new Error('Reasoning job timed out.');
+
+    const resultText = await kgApiService.reasoningResult(apiBaseUrl, response.jobId, reasoningResultFormat);
     const parsed = await rdfService.parseRdf(resultText, inferMimeTypeFromResultFormat(reasoningResultFormat));
     setInferredGraph(parsed);
-  }), [apiBaseUrl, reasoningJobId, reasoningResultFormat, runAnalyzeAction]);
+    setAnalyzeMessage('Reasoning completed. Inferred results are ready.');
+  }), [apiBaseUrl, ensureCurrentGraphUploaded, reasoningProfile, reasoningResultFormat, runAnalyzeAction]);
 
   const handleRunReasoningDirect = useCallback(() => runAnalyzeAction('Run direct reasoning', async () => {
     const graphId = await ensureCurrentGraphUploaded();
@@ -433,7 +490,7 @@ function App() {
     setShapesId(null);
   }), [apiBaseUrl, shapesId, runAnalyzeAction]);
 
-  const handleCreateShaclJob = useCallback(() => runAnalyzeAction('Create SHACL job', async () => {
+  const handleCreateShaclJob = useCallback(() => runAnalyzeAction('Run SHACL validation', async () => {
     const graphId = await ensureCurrentGraphUploaded();
     if (!shapesId) throw new Error('No shapes_id available. Upload shapes first.');
 
@@ -442,16 +499,36 @@ function App() {
       shapesId,
       options: {}
     });
+
     setShaclJobId(response.jobId);
     setShaclJobStatus('queued');
-  }), [apiBaseUrl, ensureCurrentGraphUploaded, shapesId, runAnalyzeAction]);
+    let completed = false;
+    for (let i = 0; i < JOB_MAX_POLLS; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
+      const status = await kgApiService.shaclJob(apiBaseUrl, response.jobId);
+      setShaclJobStatus(status.status);
+      setAnalyzeMessage(`SHACL job is ${status.status}...`);
 
-  const handlePollShaclJob = useCallback(() => runAnalyzeAction('Poll SHACL job', async () => {
-    if (!shaclJobId) throw new Error('No SHACL job_id available.');
-    const status = await kgApiService.shaclJob(apiBaseUrl, shaclJobId);
-    setShaclJobStatus(status.status);
-    if (status.status === 'failed' && status.error?.message) throw new Error(status.error.message);
-  }), [apiBaseUrl, shaclJobId, runAnalyzeAction]);
+      if (status.status === 'failed') {
+        throw new Error(status.error?.message || 'SHACL job failed.');
+      }
+      if (status.status === 'succeeded') {
+        completed = true;
+        break;
+      }
+    }
+
+    if (!completed) throw new Error('SHACL job timed out.');
+
+    const report = await kgApiService.shaclReport(apiBaseUrl, response.jobId);
+    setShaclReport(report);
+    setIsShaclReportPaneOpen(true);
+    const invalid = new Set((report.report.violations || []).map((v) => v.focusNode).filter(Boolean) as string[]);
+    setInvalidNodeIds(invalid);
+    setShaclFocusNodeId(null);
+    setShaclFocusPredicate(null);
+    setAnalyzeMessage('SHACL validation completed. Report is ready.');
+  }), [apiBaseUrl, ensureCurrentGraphUploaded, shapesId, runAnalyzeAction]);
 
   const handleFetchShaclReport = useCallback(() => runAnalyzeAction('Fetch SHACL report', async () => {
     if (!shaclJobId) throw new Error('No SHACL job_id available.');
@@ -550,6 +627,10 @@ function App() {
             setLayout={handleLayoutChange}
             colorSettings={colorSettings}
             setColorSettings={setColorSettings}
+            showNodeLabels={showNodeLabels}
+            setShowNodeLabels={setShowNodeLabels}
+            showEdgeLabels={showEdgeLabels}
+            setShowEdgeLabels={setShowEdgeLabels}
             communitySettings={communitySettings}
             setCommunitySettings={setCommunitySettings}
             onRunCommunityDetection={runCommunityDetection}
@@ -575,10 +656,7 @@ function App() {
             setReasoningResultFormat={setReasoningResultFormat}
             reasoningJobId={reasoningJobId}
             reasoningJobStatus={reasoningJobStatus}
-            onCreateReasoningJob={handleCreateReasoningJob}
-            onPollReasoningJob={handlePollReasoningJob}
-            onFetchReasoningResult={handleFetchReasoningResult}
-            onRunReasoningDirect={handleRunReasoningDirect}
+            onRunReasoningWorkflow={handleCreateReasoningJob}
             onMergeInferred={handleMergeInferred}
             onExportInferredJsonLd={handleExportInferredJsonLd}
             inferredTriplesCount={inferredGraph?.edges.length || 0}
@@ -588,9 +666,7 @@ function App() {
             onUploadShapes={handleUploadShapes}
             shaclJobId={shaclJobId}
             shaclJobStatus={shaclJobStatus}
-            onCreateShaclJob={handleCreateShaclJob}
-            onPollShaclJob={handlePollShaclJob}
-            onFetchShaclReport={handleFetchShaclReport}
+            onRunShaclWorkflow={handleCreateShaclJob}
             onDownloadShaclReport={handleDownloadShaclReport}
             onDeleteShapes={handleDeleteShapes}
             shaclReport={shaclReport}
@@ -609,6 +685,8 @@ function App() {
                 edges={renderGraph.edges}
                 layout={layout}
                 colorSettings={colorSettings}
+                showNodeLabels={showNodeLabels}
+                showEdgeLabels={showEdgeLabels}
                 onNodeClick={(node) => {
                   const next = applyNodeClickSelection(node, renderGraph.nodes, fullGraph.nodes, focusMode);
                   setSelectedNodeId(next.selectedNodeId);
@@ -660,6 +738,14 @@ function App() {
               <AlertCircle size={20} className="text-red-400" />
               <p className="text-sm">{error}</p>
               <button onClick={() => setError(null)} className="ml-auto hover:text-white"><span className="sr-only">Dismiss</span>x</button>
+            </div>
+          )}
+
+          {infoMessage && !error && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-blue-500/10 border border-blue-500/50 text-blue-100 px-4 py-3 rounded-lg flex items-center gap-3 shadow-xl backdrop-blur-md max-w-2xl z-50">
+              <AlertCircle size={20} className="text-blue-300" />
+              <p className="text-sm">{infoMessage}</p>
+              <button onClick={() => setInfoMessage(null)} className="ml-auto hover:text-white"><span className="sr-only">Dismiss</span>x</button>
             </div>
           )}
         </div>

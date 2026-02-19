@@ -233,3 +233,67 @@ export function getNeighborCount(index: GraphIndex, nodeId: string): number {
 
   return neighborIds.size;
 }
+
+export interface LoadPredicatePolicyOptions {
+  tripleThreshold: number;
+  maxActivePredicates: number;
+}
+
+export interface LoadPredicatePolicyResult {
+  selectedPredicates: string[];
+  isLimited: boolean;
+  summary: string | null;
+}
+
+export function deriveInitialPredicatePolicy(
+  fullGraph: GraphData,
+  options: LoadPredicatePolicyOptions
+): LoadPredicatePolicyResult {
+  const tripleCount = fullGraph.edges.length;
+  if (tripleCount <= options.tripleThreshold) {
+    return { selectedPredicates: [], isLimited: false, summary: null };
+  }
+
+  const byPredicate = new Map<string, number>();
+  fullGraph.edges.forEach((edge) => {
+    const key = edge.label || edge.predicate;
+    byPredicate.set(key, (byPredicate.get(key) || 0) + 1);
+  });
+
+  const predicates = Array.from(byPredicate.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([predicate]) => predicate);
+
+  if (predicates.length === 0) {
+    return {
+      selectedPredicates: [PREDICATE_NONE_SENTINEL],
+      isLimited: true,
+      summary: `Loaded ${tripleCount.toLocaleString()} triples with no identifiable predicates; all predicate edges are disabled by default.`
+    };
+  }
+
+  if (predicates.length === 1) {
+    return {
+      selectedPredicates: [PREDICATE_NONE_SENTINEL],
+      isLimited: true,
+      summary: `Loaded ${tripleCount.toLocaleString()} triples. Predicate rendering is disabled by default for performance because all edges share one predicate.`
+    };
+  }
+
+  let targetCount = Math.min(options.maxActivePredicates, predicates.length);
+  if (targetCount === predicates.length) targetCount = predicates.length - 1;
+  targetCount = Math.max(1, targetCount);
+
+  const prioritized = [RDF_TYPE, RDFS_SUBCLASS_OF].filter((pred) => predicates.includes(pred));
+  const selected = new Set<string>(prioritized);
+  for (const pred of predicates) {
+    if (selected.size >= targetCount) break;
+    selected.add(pred);
+  }
+
+  return {
+    selectedPredicates: Array.from(selected),
+    isLimited: true,
+    summary: `Large graph mode: loaded ${tripleCount.toLocaleString()} triples and enabled ${selected.size}/${predicates.length} predicates by default.`
+  };
+}

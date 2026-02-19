@@ -60,3 +60,8 @@ export const COLOR_PALETTE = [
 export const PREDICATE_NONE_SENTINEL = '__NONE__';
 export const DEFAULT_API_BASE_URL = '/kgapi';
 export const STORAGE_API_BASE_URL_KEY = 'rdfExplorer.apiBaseUrl';
+
+// Large graph defaults: load with a bounded predicate subset to avoid
+// rendering every relation on first paint.
+export const LARGE_GRAPH_TRIPLE_THRESHOLD = 5000;
+export const LARGE_GRAPH_MAX_ACTIVE_PREDICATES = 24;

@@ -12,6 +12,10 @@ interface SidebarProps {
   setLayout: (l: LayoutType) => void;
   colorSettings: ColorSettings;
   setColorSettings: (c: ColorSettings) => void;
+  showNodeLabels: boolean;
+  setShowNodeLabels: (value: boolean) => void;
+  showEdgeLabels: boolean;
+  setShowEdgeLabels: (value: boolean) => void;
   communitySettings: CommunitySettings;
   setCommunitySettings: (c: CommunitySettings) => void;
   onRunCommunityDetection: () => void;
@@ -37,10 +41,7 @@ interface SidebarProps {
   setReasoningResultFormat: (value: ReasoningResultFormat) => void;
   reasoningJobId: string | null;
   reasoningJobStatus: string;
-  onCreateReasoningJob: () => void;
-  onPollReasoningJob: () => void;
-  onFetchReasoningResult: () => void;
-  onRunReasoningDirect: () => void;
+  onRunReasoningWorkflow: () => void;
   onMergeInferred: () => void;
   onExportInferredJsonLd: () => void;
   inferredTriplesCount: number;
@@ -50,9 +51,7 @@ interface SidebarProps {
   onUploadShapes: (file: File) => void;
   shaclJobId: string | null;
   shaclJobStatus: string;
-  onCreateShaclJob: () => void;
-  onPollShaclJob: () => void;
-  onFetchShaclReport: () => void;
+  onRunShaclWorkflow: () => void;
   onDownloadShaclReport: () => void;
   onDeleteShapes: () => void;
   shaclReport: ApiShaclReportResponse | null;
@@ -71,6 +70,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   setLayout,
   colorSettings,
   setColorSettings,
+  showNodeLabels,
+  setShowNodeLabels,
+  showEdgeLabels,
+  setShowEdgeLabels,
   communitySettings,
   setCommunitySettings,
   onRunCommunityDetection,
@@ -96,10 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setReasoningResultFormat,
   reasoningJobId,
   reasoningJobStatus,
-  onCreateReasoningJob,
-  onPollReasoningJob,
-  onFetchReasoningResult,
-  onRunReasoningDirect,
+  onRunReasoningWorkflow,
   onMergeInferred,
   onExportInferredJsonLd,
   inferredTriplesCount,
@@ -109,9 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onUploadShapes,
   shaclJobId,
   shaclJobStatus,
-  onCreateShaclJob,
-  onPollShaclJob,
-  onFetchShaclReport,
+  onRunShaclWorkflow,
   onDownloadShaclReport,
   onDeleteShapes,
   shaclReport,
@@ -240,6 +238,32 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="space-y-3">
+              <h3 className="text-slate-400 uppercase text-xs font-bold tracking-wider">Labels</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setShowNodeLabels(!showNodeLabels)}
+                  className={`py-2 px-3 rounded text-xs border transition-colors ${
+                    showNodeLabels
+                      ? 'bg-emerald-700/30 border-emerald-500/50 text-emerald-200'
+                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  {showNodeLabels ? 'Node Labels: On' : 'Node Labels: Off'}
+                </button>
+                <button
+                  onClick={() => setShowEdgeLabels(!showEdgeLabels)}
+                  className={`py-2 px-3 rounded text-xs border transition-colors ${
+                    showEdgeLabels
+                      ? 'bg-emerald-700/30 border-emerald-500/50 text-emerald-200'
+                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  {showEdgeLabels ? 'Edge Labels: On' : 'Edge Labels: Off'}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
               <h3 className="text-slate-400 uppercase text-xs font-bold tracking-wider flex items-center gap-2"><Filter size={14} /> Filters</h3>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Search</label>
@@ -334,10 +358,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={onCreateReasoningJob} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Create Job</button>
-                <button onClick={onPollReasoningJob} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Poll Job</button>
-                <button onClick={onFetchReasoningResult} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Get Result</button>
-                <button onClick={onRunReasoningDirect} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Direct Run</button>
+                <button
+                  onClick={onRunReasoningWorkflow}
+                  className="col-span-2 py-2 text-xs rounded border border-blue-700/60 bg-blue-900/20 hover:bg-blue-900/40"
+                >
+                  Run Reasoning (Auto Poll)
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -367,10 +393,13 @@ const Sidebar: React.FC<SidebarProps> = ({
               />
 
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={onCreateShaclJob} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Create SHACL Job</button>
-                <button onClick={onPollShaclJob} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Poll SHACL Job</button>
-                <button onClick={onFetchShaclReport} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Get Report</button>
-                <button onClick={onDownloadShaclReport} className="py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Download Report</button>
+                <button
+                  onClick={onRunShaclWorkflow}
+                  className="col-span-2 py-2 text-xs rounded border border-blue-700/60 bg-blue-900/20 hover:bg-blue-900/40"
+                >
+                  Run SHACL Validation (Auto Poll)
+                </button>
+                <button onClick={onDownloadShaclReport} className="col-span-2 py-1.5 text-xs rounded border border-slate-600 bg-slate-800 hover:bg-slate-700">Download Report</button>
               </div>
 
               <button onClick={onDeleteShapes} disabled={!shapesId} className="w-full py-1.5 text-xs rounded border border-red-700/60 bg-red-900/20 hover:bg-red-900/40 disabled:opacity-40 flex items-center justify-center gap-1"><Trash2 size={12} /> DELETE shapes</button>

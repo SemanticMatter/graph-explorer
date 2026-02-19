@@ -7,6 +7,7 @@ import {
   buildExpandedGraph,
   buildFilteredGraph,
   buildGraphIndex,
+  deriveInitialPredicatePolicy,
   enforcePredicateVisibilityPolicy,
   getNeighborCount,
   mergeFilteredWithExpanded
@@ -155,4 +156,58 @@ test('predicate policy: expanded edges disappear immediately once expansion flag
 
   assert.equal(resultWith.edges.length, 1);
   assert.equal(resultWithout.edges.length, 0);
+});
+
+test('deriveInitialPredicatePolicy keeps all predicates for small graphs', () => {
+  const result = deriveInitialPredicatePolicy(sampleGraph, {
+    tripleThreshold: 100,
+    maxActivePredicates: 2
+  });
+
+  assert.equal(result.isLimited, false);
+  assert.deepEqual(result.selectedPredicates, []);
+  assert.equal(result.summary, null);
+});
+
+test('deriveInitialPredicatePolicy limits predicates for large graphs', () => {
+  const largeGraph: GraphData = {
+    nodes: sampleGraph.nodes,
+    edges: [
+      ...Array.from({ length: 60 }, (_, i) => ({ id: `k-${i}`, source: 'A', target: 'B', label: 'knows', predicate: 'knows' })),
+      ...Array.from({ length: 40 }, (_, i) => ({ id: `w-${i}`, source: 'A', target: 'C', label: 'worksAt', predicate: 'worksAt' })),
+      ...Array.from({ length: 20 }, (_, i) => ({ id: `n-${i}`, source: 'A', target: 'LIT', label: 'name', predicate: 'name' }))
+    ],
+    prefixes: {}
+  };
+
+  const result = deriveInitialPredicatePolicy(largeGraph, {
+    tripleThreshold: 50,
+    maxActivePredicates: 2
+  });
+
+  assert.equal(result.isLimited, true);
+  assert.deepEqual(result.selectedPredicates.sort(), ['knows', 'worksAt']);
+  assert.equal(Boolean(result.summary), true);
+});
+
+test('deriveInitialPredicatePolicy disables all when a huge graph has a single predicate', () => {
+  const singlePredLarge: GraphData = {
+    nodes: sampleGraph.nodes,
+    edges: Array.from({ length: 120 }, (_, i) => ({
+      id: `e-${i}`,
+      source: 'A',
+      target: 'B',
+      label: 'knows',
+      predicate: 'knows'
+    })),
+    prefixes: {}
+  };
+
+  const result = deriveInitialPredicatePolicy(singlePredLarge, {
+    tripleThreshold: 100,
+    maxActivePredicates: 10
+  });
+
+  assert.equal(result.isLimited, true);
+  assert.deepEqual(result.selectedPredicates, [PREDICATE_NONE_SENTINEL]);
 });
